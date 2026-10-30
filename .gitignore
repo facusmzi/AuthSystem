@@ -16,3 +16,4 @@ keys/
 appsettings.*.local.json
 *.pem
 *.pfx
+mail/

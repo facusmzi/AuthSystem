@@ -54,3 +54,27 @@ emite `node-argon2` (`$argon2id$v=19$m=..,t=..,p=..$salt$hash`, base64 sin paddi
 
 En Windows + `Production` las claves se cifran con DPAPI. En Linux hay que configurar
 `ProtectKeysWithCertificate` en el despliegue (documentado en `docs/API.md`).
+
+## D-008 · Whitelist beta: 202 sin revelar
+
+Con `Features:BetaWhitelist` activo y un email fuera de la lista, el registro responde el mismo 202 que
+un registro normal (no crea nada y audita `RegistrationRejectedWhitelist`). Se elige la variante que no
+revela información por sobre el 403 explícito del original.
+
+## D-009 · Emails encolados
+
+`IEmailSender` encola en un `Channel` y un `BackgroundService` hace el envío real (Logging / Pickup / SMTP).
+Así la latencia de `register`, `resend-confirmation` y `forgot-password` no depende de si la cuenta existe
+ni de la latencia del SMTP. El proveedor `Logging` solo registra destinatario y asunto (el cuerpo lleva
+tokens); en desarrollo se usa `Pickup`, que escribe `.eml` en `mail/` (ignorado por git).
+
+## D-010 · Token providers con reloj inyectable
+
+Confirmación de email (24 h) y reset (1 h) usan `TimedTokenProvider`, equivalente a
+`DataProtectorTokenProvider` pero con `TimeProvider` (testeable) y tokens base64url. El token incluye el
+security stamp, por lo que el de reset queda inválido tras usarse (uso único).
+
+## D-011 · Validación de contraseña antes de mirar si el email existe
+
+En el registro la política de contraseña (incluido HIBP) se evalúa primero, y en el camino "email
+existente" se gasta un hash Argon2 equivalente: ni el código de estado ni la latencia revelan la cuenta.

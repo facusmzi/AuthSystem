@@ -1,7 +1,14 @@
 using System.Diagnostics;
+using System.Net;
 using Auth.Api.Errors;
+using Auth.Api.Middleware;
 using Auth.Api.Options;
+using Auth.Api.Services;
+using Auth.Application;
+using Auth.Application.Abstractions;
 using Auth.Application.Common;
+using Microsoft.AspNetCore.HttpOverrides;
+using Microsoft.Extensions.Options;
 
 namespace Auth.Api;
 
@@ -9,34 +16,69 @@ public static class ApiServiceCollectionExtensions
 {
     public static IServiceCollection AddApi(this IServiceCollection services, IConfiguration configuration, IHostEnvironment environment)
     {
-        services.AddOptions<CorsOptions>()
-            .BindConfiguration(CorsOptions.SectionName)
-            .ValidateDataAnnotations()
-            .Validate(o => o.AllowedOrigins.All(IsExactOrigin), "Cors:AllowedOrigins must contain exact origins (scheme://host[:port]), never '*'.")
-            .ValidateOnStart();
+        _ = environment;
+        services.AddApplication();
+        services.AddHttpContextAccessor();
+        services.AddScoped<ICurrentUser, CurrentUser>();
+        services.AddScoped<IClientInfo, ClientInfo>();
 
+        AddProblemDetails(services);
+        AddCors(services);
+        AddForwardedHeaders(services, configuration);
+        services.AddAuthRateLimiting();
+
+        services.AddHealthChecks();
+        return services;
+    }
+
+    private static void AddProblemDetails(IServiceCollection services)
+    {
         services.AddProblemDetails(options => options.CustomizeProblemDetails = ctx =>
         {
             ctx.ProblemDetails.Extensions.TryAdd("traceId", Activity.Current?.Id ?? ctx.HttpContext.TraceIdentifier);
             ctx.ProblemDetails.Extensions.TryAdd("code", CodeForStatus(ctx.ProblemDetails.Status ?? ctx.HttpContext.Response.StatusCode));
         });
         services.AddExceptionHandler<GlobalExceptionHandler>();
+    }
 
-        services.AddCors(options =>
-        {
-            var origins = configuration.GetSection(CorsOptions.SectionName).Get<CorsOptions>()?.AllowedOrigins ?? [];
-            options.AddPolicy(CorsOptions.PolicyName, policy => policy
-                .WithOrigins(origins)
+    private static void AddCors(IServiceCollection services)
+    {
+        services.AddOptions<CorsOptions>()
+            .BindConfiguration(CorsOptions.SectionName)
+            .ValidateDataAnnotations()
+            .Validate(o => o.AllowedOrigins.All(IsExactOrigin), "Cors:AllowedOrigins must contain exact origins (scheme://host[:port]), never '*'.")
+            .ValidateOnStart();
+
+        services.AddCors();
+        services.AddOptions<Microsoft.AspNetCore.Cors.Infrastructure.CorsOptions>()
+            .Configure<IOptions<CorsOptions>>((cors, frontend) => cors.AddPolicy(CorsOptions.PolicyName, policy => policy
+                .WithOrigins(frontend.Value.AllowedOrigins)
                 .AllowCredentials()
                 .WithHeaders("Content-Type", "Authorization", "X-XSRF-TOKEN")
                 .WithMethods("GET", "POST", "PUT", "PATCH", "DELETE")
-                .SetPreflightMaxAge(TimeSpan.FromMinutes(10)));
+                .SetPreflightMaxAge(TimeSpan.FromMinutes(10))));
+    }
+
+    private static void AddForwardedHeaders(IServiceCollection services, IConfiguration configuration)
+    {
+        services.AddOptions<NetworkOptions>().BindConfiguration(NetworkOptions.SectionName);
+        services.Configure<ForwardedHeadersOptions>(options =>
+        {
+            var network = configuration.GetSection(NetworkOptions.SectionName).Get<NetworkOptions>() ?? new NetworkOptions();
+            options.ForwardedHeaders = ForwardedHeaders.XForwardedFor | ForwardedHeaders.XForwardedProto;
+            options.ForwardLimit = 1;
+            options.KnownProxies.Clear();
+            options.KnownIPNetworks.Clear();
+            foreach (var proxy in network.KnownProxies)
+            {
+                options.KnownProxies.Add(IPAddress.Parse(proxy));
+            }
+
+            foreach (var cidr in network.KnownNetworks)
+            {
+                options.KnownIPNetworks.Add(System.Net.IPNetwork.Parse(cidr));
+            }
         });
-
-        services.AddHealthChecks();
-
-        _ = environment;
-        return services;
     }
 
     private static bool IsExactOrigin(string origin) =>

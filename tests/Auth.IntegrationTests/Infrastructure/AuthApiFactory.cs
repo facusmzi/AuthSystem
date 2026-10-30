@@ -1,3 +1,5 @@
+using Auth.Application.Abstractions;
+using Auth.Infrastructure.Persistence;
 using Microsoft.AspNetCore.Hosting;
 using Microsoft.AspNetCore.Mvc.Testing;
 using Microsoft.AspNetCore.TestHost;
@@ -17,6 +19,8 @@ public class AuthApiFactory : WebApplicationFactory<Program>
     private readonly string _directory = Path.Combine(Path.GetTempPath(), "auth-tests", Guid.NewGuid().ToString("N"));
 
     public FakeTimeProvider Clock { get; } = new(DateTimeOffset.UtcNow);
+    public InMemoryEmailSender Emails { get; } = new();
+    public FakeBreachChecker BreachChecker { get; } = new();
 
     /// <summary>Overrides de configuración adicionales para fixtures especializados.</summary>
     protected virtual IReadOnlyDictionary<string, string?> ExtraSettings => new Dictionary<string, string?>();
@@ -37,13 +41,13 @@ public class AuthApiFactory : WebApplicationFactory<Program>
             ["PasswordHashing:MemoryKiB"] = "8192",
             ["PasswordHashing:Iterations"] = "1",
             ["PasswordHashing:Parallelism"] = "1",
-            ["RateLimiting:StrictPerMinute"] = "10000",
-            ["RateLimiting:LoginPerMinute"] = "10000",
-            ["RateLimiting:MfaPerMinute"] = "10000",
-            ["RateLimiting:RefreshPerMinute"] = "10000",
-            ["RateLimiting:GlobalPerMinute"] = "100000",
+            ["RateLimiting:StrictPerMinute"] = "100000",
+            ["RateLimiting:LoginPerMinute"] = "100000",
+            ["RateLimiting:MfaPerMinute"] = "100000",
+            ["RateLimiting:RefreshPerMinute"] = "100000",
+            ["RateLimiting:GlobalPerMinute"] = "1000000",
             ["Email:Provider"] = "Logging",
-            ["Hibp:Enabled"] = "false",
+            ["Hibp:Enabled"] = "true",
             ["Maintenance:Enabled"] = "false",
         };
 
@@ -61,6 +65,10 @@ public class AuthApiFactory : WebApplicationFactory<Program>
         {
             services.RemoveAll<TimeProvider>();
             services.AddSingleton<TimeProvider>(Clock);
+            services.RemoveAll<IEmailSender>();
+            services.AddSingleton<IEmailSender>(Emails);
+            services.RemoveAll<IPasswordBreachChecker>();
+            services.AddSingleton<IPasswordBreachChecker>(BreachChecker);
             ConfigureServices(services);
         });
     }
@@ -75,6 +83,19 @@ public class AuthApiFactory : WebApplicationFactory<Program>
         AllowAutoRedirect = false,
         HandleCookies = true,
     });
+
+    /// <summary>Ejecuta código contra la base de datos real del host de pruebas.</summary>
+    public async Task<T> WithDbAsync<T>(Func<AppDbContext, Task<T>> action)
+    {
+        await using var scope = Services.CreateAsyncScope();
+        return await action(scope.ServiceProvider.GetRequiredService<AppDbContext>());
+    }
+
+    public async Task WithScopeAsync(Func<IServiceProvider, Task> action)
+    {
+        await using var scope = Services.CreateAsyncScope();
+        await action(scope.ServiceProvider);
+    }
 
     protected override void Dispose(bool disposing)
     {

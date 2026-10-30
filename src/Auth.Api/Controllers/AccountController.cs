@@ -1,10 +1,12 @@
 using Auth.Api.Authentication;
 using Auth.Api.Errors;
+using Auth.Api.Options;
 using Auth.Application.Abstractions;
 using Auth.Application.Features.Account;
 using Auth.Application.Features.Sessions;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
+using Microsoft.AspNetCore.RateLimiting;
 
 namespace Auth.Api.Controllers;
 
@@ -19,6 +21,14 @@ public sealed class AccountController(IAccountService account, ISessionService s
     [ProducesResponseType<MeResponse>(StatusCodes.Status200OK)]
     public async Task<IActionResult> Me(CancellationToken ct) =>
         (await account.GetMeAsync(currentUser.RequiredUserId, ct)).ToActionResult(me => Ok(me));
+
+    [HttpPost("change-password")]
+    [EnableRateLimiting(RateLimitingOptions.Strict)]
+    [ProducesResponseType(StatusCodes.Status204NoContent)]
+    [ProducesResponseType<ProblemDetails>(StatusCodes.Status400BadRequest)]
+    [ProducesResponseType<HttpValidationProblemDetails>(StatusCodes.Status422UnprocessableEntity)]
+    public async Task<IActionResult> ChangePassword(ChangePasswordRequest request, CancellationToken ct) =>
+        (await account.ChangePasswordAsync(currentUser.RequiredUserId, currentUser.SessionId, request, ct)).ToActionResult(NoContent);
 
     [HttpGet("sessions")]
     [ProducesResponseType<IReadOnlyList<SessionDto>>(StatusCodes.Status200OK)]

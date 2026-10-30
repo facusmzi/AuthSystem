@@ -63,4 +63,7 @@ public interface IPermissionService
 public interface IAccountService
 {
     Task<Result<Features.Account.MeResponse>> GetMeAsync(Guid userId, CancellationToken cancellationToken);
+
+    /// <summary>Cambia la contraseña y revoca todas las demás sesiones (la actual sigue).</summary>
+    Task<Result> ChangePasswordAsync(Guid userId, Guid? currentSessionId, Features.Account.ChangePasswordRequest request, CancellationToken cancellationToken);
 }

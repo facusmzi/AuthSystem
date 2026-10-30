@@ -130,3 +130,12 @@ antes del binding/validación. El token antiforgery está atado a la identidad: 
 - El bloqueo de admin es indefinido (`LockoutEnd = MaxValue`), revoca todas las sesiones (`UserLocked`) y solo
   se levanta con `unlock`.
 - `PermissionService` está en Infrastructure y se prueba como test de integración (necesita la DB real).
+
+## D-019 · Contraseñas: códigos de error
+
+- `change-password` con contraseña actual incorrecta → **400** `INVALID_CREDENTIALS` (no 401, para que la SPA
+  no interprete que la sesión cayó). El fallo cuenta para el lockout: una sesión robada no sirve para adivinar.
+- Política (longitud, igual al email, HIBP) → 422 con errores en `newPassword`.
+- HIBP caído con `Hibp:FailOpen = false` → 422 `PASSWORD_TOO_WEAK` con un mensaje "intentá más tarde".
+- `forgot-password` solo envía mail a cuentas confirmadas y no bloqueadas por admin; siempre 202.
+- El reset exitoso levanta el lockout por intentos fallidos (no el bloqueo de admin) y revoca todas las sesiones.

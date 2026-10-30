@@ -76,6 +76,22 @@ public sealed class AuthController(IAuthService auth, ISessionService sessions, 
     public async Task<IActionResult> Refresh(RefreshRequest request, CancellationToken ct) =>
         (await auth.RefreshAsync(request, ct)).ToActionResult(t => Ok(t));
 
+    [HttpPost("forgot-password")]
+    [AllowAnonymous]
+    [EnableRateLimiting(RateLimitingOptions.Strict)]
+    [ProducesResponseType<MessageResponse>(StatusCodes.Status202Accepted)]
+    public async Task<IActionResult> ForgotPassword(EmailRequest request, CancellationToken ct) =>
+        (await auth.ForgotPasswordAsync(request, ct)).ToActionResult(() => Accepted(EmailAccepted));
+
+    [HttpPost("reset-password")]
+    [AllowAnonymous]
+    [EnableRateLimiting(RateLimitingOptions.Strict)]
+    [ProducesResponseType<MessageResponse>(StatusCodes.Status200OK)]
+    [ProducesResponseType<ProblemDetails>(StatusCodes.Status400BadRequest)]
+    [ProducesResponseType<HttpValidationProblemDetails>(StatusCodes.Status422UnprocessableEntity)]
+    public async Task<IActionResult> ResetPassword(ResetPasswordRequest request, CancellationToken ct) =>
+        (await auth.ResetPasswordAsync(request, ct)).ToActionResult(() => Ok(new MessageResponse("Password reset. Please sign in again.")));
+
     [HttpPost("logout")]
     [Authorize(Policy = AuthPolicies.Authenticated)]
     [ProducesResponseType(StatusCodes.Status204NoContent)]

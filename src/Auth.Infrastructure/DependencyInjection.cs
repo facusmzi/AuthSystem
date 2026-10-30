@@ -41,6 +41,9 @@ public static class DependencyInjection
         services.AddScoped<IAuditLogger, AuditLogger>();
         services.AddScoped<IPasswordService, PasswordService>();
         services.AddScoped<AccountLockout>();
+        services.AddScoped<TotpVerifier>();
+        services.AddSingleton<MfaChallengeProtector>();
+        services.AddScoped<IMfaService, MfaService>();
         services.AddScoped<IAccountService, AccountService>();
         services.AddScoped<IAuthService, AuthService>();
         services.AddScoped<IUserAdminService, UserAdminService>();
@@ -124,6 +127,7 @@ public static class DependencyInjection
         services.AddIdentityCore<ApplicationUser>()
             .AddRoles<ApplicationRole>()
             .AddEntityFrameworkStores<AppDbContext>()
+            .AddUserStore<AppUserStore>()
             .AddDefaultTokenProviders()
             .AddTokenProvider<LongLivedEmailConfirmationTokenProvider>(LongLivedEmailConfirmationTokenProvider.ProviderName)
             .AddTokenProvider<PasswordResetTokenProvider>(PasswordResetTokenProvider.ProviderName)

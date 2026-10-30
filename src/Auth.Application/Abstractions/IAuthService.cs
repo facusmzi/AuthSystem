@@ -15,6 +15,8 @@ public interface IAuthService
 
     Task<Result<LoginResult>> LoginAsync(LoginRequest request, SessionKind kind, CancellationToken cancellationToken);
 
+    Task<Result<LoginResult>> LoginMfaAsync(LoginMfaRequest request, SessionKind kind, CancellationToken cancellationToken);
+
     Task<Result<TokenResponse>> RefreshAsync(RefreshRequest request, CancellationToken cancellationToken);
 
     Task<Result> ForgotPasswordAsync(EmailRequest request, CancellationToken cancellationToken);

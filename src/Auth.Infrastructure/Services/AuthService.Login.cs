@@ -52,8 +52,69 @@ internal sealed partial class AuthService
             return Error.Forbidden(ErrorCodes.EmailNotConfirmed, "The email address has not been confirmed.");
         }
 
+        if (user.TwoFactorEnabled)
+        {
+            // Todavía no hay sesión ni se resetea el contador de fallos: los errores de MFA siguen sumando.
+            var challenge = mfaChallenges.Protect(user.Id, await users.GetSecurityStampAsync(user), kind == SessionKind.Cookie);
+            await audit.LogAsync(new AuditEntry(AuditEventType.MfaChallengeIssued, true, user.Id, normalizedEmail), cancellationToken);
+            return LoginResult.MfaRequired(challenge);
+        }
+
         await lockout.ResetAsync(user);
         return await CompleteLoginAsync(user, kind, LoginMethod.Password, cancellationToken);
+    }
+
+    public async Task<Result<LoginResult>> LoginMfaAsync(LoginMfaRequest request, SessionKind kind, CancellationToken cancellationToken)
+    {
+        var mfaInvalid = Error.Unauthorized(ErrorCodes.MfaInvalid, "The verification code or MFA token is invalid or has expired.");
+
+        var challenge = mfaChallenges.Unprotect(request.MfaToken);
+        if (challenge is null || challenge.UseCookies != (kind == SessionKind.Cookie))
+        {
+            return mfaInvalid;
+        }
+
+        var user = await users.FindByIdAsync(challenge.UserId.ToString());
+        if (user is null
+            || !user.TwoFactorEnabled
+            || lockout.IsLockedOut(user)
+            || !string.Equals(await users.GetSecurityStampAsync(user), challenge.SecurityStamp, StringComparison.Ordinal))
+        {
+            await audit.LogAsync(new AuditEntry(AuditEventType.MfaFailed, false, user?.Id, user?.Email,
+                Details: new Dictionary<string, object?> { ["reason"] = "challenge_rejected" }), cancellationToken);
+            return mfaInvalid;
+        }
+
+        var usedRecoveryCode = !string.IsNullOrWhiteSpace(request.RecoveryCode);
+        var verified = usedRecoveryCode
+            ? (await users.RedeemTwoFactorRecoveryCodeAsync(user, AppUserStore.NormalizeCode(request.RecoveryCode!))).Succeeded
+            : await totp.VerifyAsync(user, request.Code!);
+
+        if (!verified)
+        {
+            var locked = await lockout.RecordFailureAsync(user);
+            await audit.LogAsync(new AuditEntry(locked ? AuditEventType.LoginLockedOut : AuditEventType.MfaFailed, false, user.Id, user.Email,
+                Details: new Dictionary<string, object?> { ["method"] = usedRecoveryCode ? "recovery_code" : "totp" }), cancellationToken);
+            return mfaInvalid;
+        }
+
+        // Uso único del challenge: si dos requests compiten, solo una crea sesión.
+        if (!mfaChallenges.TryConsume(challenge))
+        {
+            return mfaInvalid;
+        }
+
+        await lockout.ResetAsync(user);
+
+        if (usedRecoveryCode)
+        {
+            var remaining = await users.CountRecoveryCodesAsync(user);
+            await audit.LogAsync(new AuditEntry(AuditEventType.RecoveryCodeUsed, true, user.Id, user.Email,
+                Details: new Dictionary<string, object?> { ["remaining"] = remaining }), cancellationToken);
+            await email.SendAsync(templates.RecoveryCodeUsed(user.Email!, remaining), cancellationToken);
+        }
+
+        return await CompleteLoginAsync(user, kind, usedRecoveryCode ? LoginMethod.RecoveryCode : LoginMethod.PasswordMfa, cancellationToken);
     }
 
     private async Task<Result<LoginResult>> CompleteLoginAsync(ApplicationUser user, SessionKind kind, LoginMethod method, CancellationToken cancellationToken)

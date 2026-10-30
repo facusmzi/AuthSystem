@@ -55,6 +55,18 @@ public sealed class AuthController(IAuthService auth, ISessionService sessions, 
         return result.IsSuccess ? await CompleteLoginAsync(result.Value) : result.Error.ToProblem();
     }
 
+    /// <summary>Segundo paso del login con MFA: <c>mfaToken</c> + código TOTP o recovery code.</summary>
+    [HttpPost("login/mfa")]
+    [AllowAnonymous]
+    [EnableRateLimiting(RateLimitingOptions.Mfa)]
+    [ProducesResponseType<LoginResponse>(StatusCodes.Status200OK)]
+    [ProducesResponseType<ProblemDetails>(StatusCodes.Status401Unauthorized)]
+    public async Task<IActionResult> LoginMfa(LoginMfaRequest request, [FromQuery] bool useCookies, CancellationToken ct)
+    {
+        var result = await auth.LoginMfaAsync(request, useCookies ? SessionKind.Cookie : SessionKind.Bearer, ct);
+        return result.IsSuccess ? await CompleteLoginAsync(result.Value) : result.Error.ToProblem();
+    }
+
     /// <summary>
     /// Token antiforgery para la SPA (cookie <c>__Host-xsrf</c> + valor para el header <c>X-XSRF-TOKEN</c>).
     /// Está atado a la identidad: pedirlo de nuevo después del login y del logout.

@@ -139,3 +139,17 @@ antes del binding/validación. El token antiforgery está atado a la identidad: 
 - HIBP caído con `Hibp:FailOpen = false` → 422 `PASSWORD_TOO_WEAK` con un mensaje "intentá más tarde".
 - `forgot-password` solo envía mail a cuentas confirmadas y no bloqueadas por admin; siempre 202.
 - El reset exitoso levanta el lockout por intentos fallidos (no el bloqueo de admin) y revoca todas las sesiones.
+
+## D-020 · MFA
+
+- **Secretos en DB**: Identity guarda por defecto los recovery codes y la clave TOTP en texto plano en
+  `AspNetUserTokens`. `AppUserStore` guarda los recovery codes como SHA-256 y la clave cifrada con Data
+  Protection (`Auth.Identity.AuthenticatorKey`). Perder las claves de Data Protection obliga a reconfigurar MFA.
+- **Challenge de login**: se usa `IDataProtector` con vencimiento propio (no `ITimeLimitedDataProtector`) para
+  poder testear con `FakeTimeProvider`. Va atado al security stamp, al tipo de sesión pedido (`useCookies`) y
+  es de uso único (`jti`). El `jti` se consume solo cuando el código es correcto: un error de tipeo no obliga a
+  repetir la contraseña, y la fuerza bruta queda acotada por el lockout compartido (5 intentos) y el rate limit.
+- **Anti-replay TOTP**: un código aceptado queda marcado 90 s por usuario (la ventana de Identity es ±2 pasos).
+- `setup` solo funciona con MFA desactivado (409 si no); `disable` rota la clave y borra los recovery codes.
+- En los endpoints de gestión, código incorrecto → 400 `MFA_INVALID` (el usuario sigue autenticado); en
+  `login/mfa` → 401 `MFA_INVALID`.

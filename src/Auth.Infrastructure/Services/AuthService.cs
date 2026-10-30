@@ -5,6 +5,7 @@ using Auth.Infrastructure.Identity;
 using Auth.Infrastructure.Options;
 using Auth.Infrastructure.Persistence;
 using Auth.Infrastructure.Security;
+using Auth.Infrastructure.Tokens;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
@@ -24,6 +25,8 @@ internal sealed partial class AuthService(
     ITokenService tokens,
     IPermissionService permissions,
     AccountLockout lockout,
+    TotpVerifier totp,
+    MfaChallengeProtector mfaChallenges,
     IEmailSender email,
     EmailTemplates templates,
     IAuditLogger audit,

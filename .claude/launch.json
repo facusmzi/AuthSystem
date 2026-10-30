@@ -1,0 +1,12 @@
+{
+  "version": "0.0.1",
+  "configurations": [
+    {
+      "name": "auth-api",
+      "runtimeExecutable": "dotnet",
+      "runtimeArgs": ["run", "--project", "src/Auth.Api", "--launch-profile", "https"],
+      "port": 7078,
+      "url": "https://localhost:7078"
+    }
+  ]
+}

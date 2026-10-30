@@ -1,0 +1,176 @@
+### Auth API — pruebas manuales (Visual Studio 2022 17.12+, Rider o VS Code + REST Client)
+### 1) Levantá la API:  dotnet run --project src/Auth.Api --launch-profile https
+### 2) Ejecutá los requests en orden con "Send request". Los que tienen "@name" guardan la respuesta
+###    para usarla en los siguientes ({{login.response.body.$.tokens.accessToken}}).
+### Ojo: en Development HIBP es real; contraseñas conocidas ("correct horse battery staple") se rechazan.
+
+@baseUrl = https://localhost:7078
+@email = prueba@example.com
+@password = violeta mandarina puerto 8841
+@newPassword = cielo granito tranvia 2207
+
+### ── Salud y descubrimiento ─────────────────────────────────────────────
+
+GET {{baseUrl}}/health/ready
+
+###
+GET {{baseUrl}}/.well-known/jwks.json
+
+### ── 1. Registro ───────────────────────────────────────────────────────
+# Siempre responde 202 (no revela si el email existe). El mail queda en src/Auth.Api/mail/*.eml
+POST {{baseUrl}}/api/v1/auth/register
+Content-Type: application/json
+
+{ "email": "{{email}}", "password": "{{password}}" }
+
+### Contraseña débil → 422 PASSWORD_TOO_WEAK
+POST {{baseUrl}}/api/v1/auth/register
+Content-Type: application/json
+
+{ "email": "otro@example.com", "password": "corta" }
+
+### ── 2. Confirmar email ────────────────────────────────────────────────
+# Abrí el .eml más nuevo de src/Auth.Api/mail/ y copiá userId y token del link (se pegan tal cual).
+@confirmUserId = PEGAR-USER-ID
+@confirmToken = PEGAR-TOKEN
+
+POST {{baseUrl}}/api/v1/auth/confirm-email
+Content-Type: application/json
+
+{ "userId": "{{confirmUserId}}", "token": "{{confirmToken}}" }
+
+### ── 3. Login Bearer ───────────────────────────────────────────────────
+# @name login
+POST {{baseUrl}}/api/v1/auth/login
+Content-Type: application/json
+
+{ "email": "{{email}}", "password": "{{password}}" }
+
+### Contraseña incorrecta → 401 INVALID_CREDENTIALS (5 seguidos bloquean la cuenta 15 min)
+POST {{baseUrl}}/api/v1/auth/login
+Content-Type: application/json
+
+{ "email": "{{email}}", "password": "no es mi contraseña" }
+
+### ── 4. Cuenta ─────────────────────────────────────────────────────────
+GET {{baseUrl}}/api/v1/account/me
+Authorization: Bearer {{login.response.body.$.tokens.accessToken}}
+
+###
+GET {{baseUrl}}/api/v1/account/sessions
+Authorization: Bearer {{login.response.body.$.tokens.accessToken}}
+
+### Sin token → 401 AUTH_HEADER_MISSING
+GET {{baseUrl}}/api/v1/account/me
+
+### ── 5. Refresh (rota el token) ────────────────────────────────────────
+# @name refresh
+POST {{baseUrl}}/api/v1/auth/refresh
+Content-Type: application/json
+
+{ "refreshToken": "{{login.response.body.$.tokens.refreshToken}}" }
+
+### Mismo refresh token otra vez dentro de 3 min → devuelve el MISMO par (gracia).
+### Pasados 3 min → 401 y la sesión entera queda revocada (detección de reuso).
+POST {{baseUrl}}/api/v1/auth/refresh
+Content-Type: application/json
+
+{ "refreshToken": "{{login.response.body.$.tokens.refreshToken}}" }
+
+### ── 6. Cambio de contraseña (revoca las demás sesiones) ───────────────
+POST {{baseUrl}}/api/v1/account/change-password
+Authorization: Bearer {{refresh.response.body.$.accessToken}}
+Content-Type: application/json
+
+{ "currentPassword": "{{password}}", "newPassword": "{{newPassword}}" }
+
+### ── 7. MFA ────────────────────────────────────────────────────────────
+# @name mfaSetup
+POST {{baseUrl}}/api/v1/account/mfa/setup
+Authorization: Bearer {{refresh.response.body.$.accessToken}}
+
+### Cargá sharedKey en Google Authenticator / Authy / 1Password y poné el código de 6 dígitos.
+### La respuesta trae los 10 recovery codes: se muestran UNA sola vez.
+@mfaCode = 123456
+
+POST {{baseUrl}}/api/v1/account/mfa/enable
+Authorization: Bearer {{refresh.response.body.$.accessToken}}
+Content-Type: application/json
+
+{ "code": "{{mfaCode}}" }
+
+### Login con MFA activo → { requiresMfa: true, mfaToken }
+# @name loginMfa1
+POST {{baseUrl}}/api/v1/auth/login
+Content-Type: application/json
+
+{ "email": "{{email}}", "password": "{{newPassword}}" }
+
+### Segundo paso (usá un código NUEVO: cada código sirve una sola vez)
+@mfaCode2 = 654321
+
+POST {{baseUrl}}/api/v1/auth/login/mfa
+Content-Type: application/json
+
+{ "mfaToken": "{{loginMfa1.response.body.$.mfaToken}}", "code": "{{mfaCode2}}" }
+
+### Estado de MFA
+GET {{baseUrl}}/api/v1/account/mfa
+Authorization: Bearer {{refresh.response.body.$.accessToken}}
+
+### ── 8. Olvidé mi contraseña / reset ───────────────────────────────────
+POST {{baseUrl}}/api/v1/auth/forgot-password
+Content-Type: application/json
+
+{ "email": "{{email}}" }
+
+### Token del link del mail de reset (src/Auth.Api/mail/)
+@resetToken = PEGAR-TOKEN-DE-RESET
+
+POST {{baseUrl}}/api/v1/auth/reset-password
+Content-Type: application/json
+
+{ "email": "{{email}}", "token": "{{resetToken}}", "newPassword": "{{password}}" }
+
+### ── 9. Logout ─────────────────────────────────────────────────────────
+POST {{baseUrl}}/api/v1/auth/logout
+Authorization: Bearer {{refresh.response.body.$.accessToken}}
+
+### Logout de todas las sesiones
+POST {{baseUrl}}/api/v1/auth/logout-all
+Authorization: Bearer {{login.response.body.$.tokens.accessToken}}
+
+### ── 10. Admin ─────────────────────────────────────────────────────────
+# Primero darte el rol Admin (con la API detenida, o en otra terminal):
+#   dotnet run --project src/Auth.Api -- seed-admin --email prueba@example.com
+# Después volvé a hacer login (request 3) para tener un token nuevo.
+
+GET {{baseUrl}}/api/v1/admin/users?search=example&page=1&pageSize=20
+Authorization: Bearer {{login.response.body.$.tokens.accessToken}}
+
+###
+GET {{baseUrl}}/api/v1/admin/roles
+Authorization: Bearer {{login.response.body.$.tokens.accessToken}}
+
+###
+POST {{baseUrl}}/api/v1/admin/roles
+Authorization: Bearer {{login.response.body.$.tokens.accessToken}}
+Content-Type: application/json
+
+{ "name": "Soporte", "description": "Lee usuarios y auditoría", "permissions": ["users.read", "audit.read"] }
+
+###
+GET {{baseUrl}}/api/v1/admin/audit?page=1&pageSize=50
+Authorization: Bearer {{login.response.body.$.tokens.accessToken}}
+
+### ── 11. Flujo SPA con cookie ─────────────────────────────────────────
+# Se prueba mejor desde el navegador (ver docs/API.md §1.1). Desde acá:
+# @name csrf
+GET {{baseUrl}}/api/v1/auth/antiforgery
+
+###
+POST {{baseUrl}}/api/v1/auth/login?useCookies=true
+X-XSRF-TOKEN: {{csrf.response.body.$.token}}
+Content-Type: application/json
+
+{ "email": "{{email}}", "password": "{{password}}" }

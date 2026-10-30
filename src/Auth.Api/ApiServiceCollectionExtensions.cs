@@ -18,7 +18,6 @@ public static class ApiServiceCollectionExtensions
 {
     public static IServiceCollection AddApi(this IServiceCollection services, IConfiguration configuration, IHostEnvironment environment)
     {
-        _ = environment;
         services.AddApplication();
         services.AddHttpContextAccessor();
         services.AddScoped<ICurrentUser, CurrentUser>();
@@ -32,7 +31,15 @@ public static class ApiServiceCollectionExtensions
         services.AddAuthSchemes();
         services.AddAuthPolicies();
 
-        services.AddHealthChecks();
+        services.AddHealthChecks()
+            .AddCheck<Infrastructure.Persistence.DatabaseHealthCheck>("database", tags: ["ready"]);
+
+        // La documentación interactiva solo existe en desarrollo.
+        if (environment.IsDevelopment())
+        {
+            services.AddOpenApi();
+        }
+
         return services;
     }
 

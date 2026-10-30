@@ -2,6 +2,7 @@ using Auth.Api.Middleware;
 using Auth.Api.Options;
 using Microsoft.AspNetCore.Diagnostics.HealthChecks;
 using Microsoft.Extensions.Options;
+using Scalar.AspNetCore;
 
 namespace Auth.Api;
 
@@ -39,7 +40,13 @@ public static class ApiPipelineExtensions
         app.MapControllers();
 
         app.MapHealthChecks("/health/live", new HealthCheckOptions { Predicate = _ => false }).AllowAnonymous();
-        app.MapHealthChecks("/health/ready").AllowAnonymous();
+        app.MapHealthChecks("/health/ready", new HealthCheckOptions { Predicate = check => check.Tags.Contains("ready") }).AllowAnonymous();
+
+        if (app.Environment.IsDevelopment())
+        {
+            app.MapOpenApi().AllowAnonymous();
+            app.MapScalarApiReference().AllowAnonymous();
+        }
 
         return app;
     }

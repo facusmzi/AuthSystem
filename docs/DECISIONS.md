@@ -153,3 +153,25 @@ antes del binding/validación. El token antiforgery está atado a la identidad: 
 - `setup` solo funciona con MFA desactivado (409 si no); `disable` rota la clave y borra los recovery codes.
 - En los endpoints de gestión, código incorrecto → 400 `MFA_INVALID` (el usuario sigue autenticado); en
   `login/mfa` → 401 `MFA_INVALID`.
+
+## D-021 · OpenAPI y Scalar solo en Development
+
+`AddOpenApi`/`MapOpenApi`/`MapScalarApiReference` se registran solo en `Development` (fuera de ahí la fallback
+policy responde 401). La CSP se relaja únicamente para `/scalar` y `/openapi` en Development.
+
+## Checklist de seguridad (PLAN §17) — estado final
+
+- [x] Ningún secreto en el repo; `.gitignore` cubre `*.db`, `keys/`, `*.pem`, `mail/`.
+- [x] Logs sin contraseñas, tokens, códigos ni hashes (los mails solo loguean destinatario/asunto).
+- [x] Respuestas genéricas en register/forgot/resend/login.
+- [x] Login en tiempo constante (hash dummy para usuario inexistente o bloqueado).
+- [x] Hashes de contraseña comparados con `FixedTimeEquals`. Refresh tokens, recovery codes y tokens de
+      email se buscan/comparan por hash o dentro de payloads autenticados por Data Protection.
+- [x] Refresh tokens y recovery codes solo hasheados en DB; clave TOTP cifrada.
+- [x] Revocación en logout, logout-all, cambio/reset de contraseña, cambios de MFA, bloqueo, reuso de refresh y admin.
+- [x] Cookies `__Host-`, HttpOnly, Secure, SameSite=Strict + antiforgery.
+- [x] JWT: solo ES256, `typ`, `iss`, `aud`, `ClockSkew` 30 s (tests con HS256 y `none`).
+- [x] Rate limits en todos los endpoints anónimos sensibles + límite global por IP.
+- [x] HTTPS + HSTS fuera de Development; Data Protection con DPAPI en Windows/Production.
+- [x] Fallback policy activa; cada endpoint anónimo marcado con `[AllowAnonymous]`.
+- [x] Licencias permisivas; `dotnet list package --vulnerable --include-transitive` limpio (2026-10-30).

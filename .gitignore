@@ -1,0 +1,18 @@
+bin/
+obj/
+.vs/
+.vscode/
+.idea/
+*.user
+*.suo
+TestResults/
+artifacts/
+
+# Datos y secretos locales
+*.db
+*.db-shm
+*.db-wal
+keys/
+appsettings.*.local.json
+*.pem
+*.pfx

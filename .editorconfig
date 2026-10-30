@@ -1,0 +1,32 @@
+root = true
+
+[*]
+charset = utf-8
+end_of_line = lf
+insert_final_newline = true
+trim_trailing_whitespace = true
+indent_style = space
+indent_size = 4
+
+[*.{json,props,csproj,xml,yml,yaml}]
+indent_size = 2
+
+[*.cs]
+csharp_style_namespace_declarations = file_scoped:warning
+csharp_using_directive_placement = outside_namespace
+dotnet_sort_system_directives_first = true
+csharp_style_var_for_built_in_types = true
+csharp_style_var_when_type_is_apparent = true
+csharp_prefer_braces = when_multiline
+dotnet_style_readonly_field = true:warning
+
+# Ruido de analizadores que no aporta en este proyecto
+dotnet_diagnostic.CA1848.severity = none   # LoggerMessage delegates
+dotnet_diagnostic.CA1716.severity = none   # nombres que chocan con keywords de VB
+dotnet_diagnostic.CA1711.severity = none
+dotnet_diagnostic.IDE0005.severity = none  # usings innecesarios (requiere GenerateDocumentationFile)
+
+[tests/**.cs]
+dotnet_diagnostic.CA1707.severity = none   # guiones bajos en nombres de tests
+dotnet_diagnostic.CA2007.severity = none
+dotnet_diagnostic.xUnit1051.severity = none # CancellationToken en tests

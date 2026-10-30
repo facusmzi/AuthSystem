@@ -29,6 +29,7 @@ public static class ApiPipelineExtensions
         app.UseRateLimiter();
         app.UseAuthentication();
         app.UseAuthorization();
+        app.UseAntiforgery();
 
         return app;
     }

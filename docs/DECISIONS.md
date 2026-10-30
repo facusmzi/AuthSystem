@@ -116,3 +116,9 @@ Se detecta el reuso del token inmediatamente anterior (`PreviousRefreshTokenHash
 3 min y se revoca la sesión. Si el token anterior aparece dentro de la gracia pero el par todavía no está en
 cache (carrera con otra request que lo está rotando), se reintenta brevemente y, si no aparece, se devuelve
 401 sin revocar.
+
+## D-017 · Antiforgery fallido → 403 `ANTIFORGERY_INVALID`
+
+El plan admite 400 o 403; se usa 403. El filtro es un `IAsyncAuthorizationFilter` global, así que corre
+antes del binding/validación. El token antiforgery está atado a la identidad: la SPA debe pedir
+`GET /api/v1/auth/antiforgery` al cargar, después del login y después del logout.

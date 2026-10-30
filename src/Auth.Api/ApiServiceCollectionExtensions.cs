@@ -40,6 +40,7 @@ public static class ApiServiceCollectionExtensions
     {
         services.AddControllers(options =>
             {
+                options.Filters.Add<AntiforgeryForCookiesFilter>();
                 options.Filters.Add<ValidationFilter>();
                 options.SuppressAsyncSuffixInActionNames = true;
             })

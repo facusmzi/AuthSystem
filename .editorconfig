@@ -30,3 +30,7 @@ dotnet_diagnostic.IDE0005.severity = none  # usings innecesarios (requiere Gener
 dotnet_diagnostic.CA1707.severity = none   # guiones bajos en nombres de tests
 dotnet_diagnostic.CA2007.severity = none
 dotnet_diagnostic.xUnit1051.severity = none # CancellationToken en tests
+
+[src/Auth.Infrastructure/Persistence/Migrations/**.cs]
+generated_code = true
+dotnet_analyzer_diagnostic.severity = none

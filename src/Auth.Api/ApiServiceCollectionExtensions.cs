@@ -1,6 +1,7 @@
 using System.Diagnostics;
 using System.Net;
 using Auth.Api.Errors;
+using Auth.Api.Filters;
 using Auth.Api.Middleware;
 using Auth.Api.Options;
 using Auth.Api.Services;
@@ -22,6 +23,7 @@ public static class ApiServiceCollectionExtensions
         services.AddScoped<ICurrentUser, CurrentUser>();
         services.AddScoped<IClientInfo, ClientInfo>();
 
+        AddControllers(services);
         AddProblemDetails(services);
         AddCors(services);
         AddForwardedHeaders(services, configuration);
@@ -29,6 +31,22 @@ public static class ApiServiceCollectionExtensions
 
         services.AddHealthChecks();
         return services;
+    }
+
+    private static void AddControllers(IServiceCollection services)
+    {
+        services.AddControllers(options =>
+            {
+                options.Filters.Add<ValidationFilter>();
+                options.SuppressAsyncSuffixInActionNames = true;
+            })
+            .ConfigureApiBehaviorOptions(options =>
+            {
+                // Errores de binding (body ausente, JSON mal formado, tipos inválidos): 400 uniforme.
+                // La validación de negocio la hace FluentValidation en ValidationFilter (422).
+                options.InvalidModelStateResponseFactory = _ =>
+                    Error.BadRequest(ErrorCodes.BadRequest, "The request body is missing or malformed.").ToProblem();
+            });
     }
 
     private static void AddProblemDetails(IServiceCollection services)

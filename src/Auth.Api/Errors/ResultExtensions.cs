@@ -1,16 +1,16 @@
+using System.Diagnostics;
 using Auth.Application.Common;
-using Microsoft.AspNetCore.Http.HttpResults;
 using Microsoft.AspNetCore.Mvc;
 
 namespace Auth.Api.Errors;
 
 public static class ResultExtensions
 {
-    public static IResult ToProblem(this Error error)
+    public static ProblemResult ToProblem(this Error error)
     {
         if (error.FieldErrors is not null)
         {
-            var validation = new HttpValidationProblemDetails(error.FieldErrors.ToDictionary(kv => kv.Key, kv => kv.Value))
+            var validation = new ValidationProblemDetails(error.FieldErrors.ToDictionary(kv => kv.Key, kv => kv.Value))
             {
                 Status = error.Status,
                 Title = error.Message,
@@ -23,10 +23,10 @@ public static class ResultExtensions
         return new ProblemResult(Problems.Create(error.Status, error.Code, TitleFor(error.Status), error.Message));
     }
 
-    public static IResult ToHttpResult(this Result result, Func<IResult> onSuccess) =>
+    public static IActionResult ToActionResult(this Result result, Func<IActionResult> onSuccess) =>
         result.IsSuccess ? onSuccess() : result.Error.ToProblem();
 
-    public static IResult ToHttpResult<T>(this Result<T> result, Func<T, IResult> onSuccess) =>
+    public static IActionResult ToActionResult<T>(this Result<T> result, Func<T, IActionResult> onSuccess) =>
         result.IsSuccess ? onSuccess(result.Value) : result.Error!.ToProblem();
 
     private static string TitleFor(int status) => status switch
@@ -43,17 +43,22 @@ public static class ResultExtensions
 }
 
 /// <summary>
-/// Escribe ProblemDetails a través de <see cref="IProblemDetailsService"/> para que todas las respuestas de
-/// error compartan la misma personalización (<c>traceId</c>, <c>code</c>).
+/// Resultado MVC para ProblemDetails (RFC 9457) con las extensiones <c>code</c> y <c>traceId</c>.
+/// Se serializa con el tipo concreto para no perder <c>errors</c> en los 422.
 /// </summary>
-public sealed class ProblemResult(ProblemDetails problem) : IResult, IStatusCodeHttpResult
+public sealed class ProblemResult(ProblemDetails problem) : IActionResult
 {
-    public int? StatusCode => problem.Status;
+    public ProblemDetails Problem => problem;
 
-    public async Task ExecuteAsync(HttpContext httpContext)
+    public Task ExecuteResultAsync(ActionContext context)
     {
-        httpContext.Response.StatusCode = problem.Status ?? StatusCodes.Status500InternalServerError;
-        var service = httpContext.RequestServices.GetRequiredService<IProblemDetailsService>();
-        await service.WriteAsync(new ProblemDetailsContext { HttpContext = httpContext, ProblemDetails = problem });
+        problem.Extensions.TryAdd("traceId", Activity.Current?.Id ?? context.HttpContext.TraceIdentifier);
+        var result = new ObjectResult(problem)
+        {
+            StatusCode = problem.Status ?? StatusCodes.Status500InternalServerError,
+            DeclaredType = problem.GetType(),
+            ContentTypes = { "application/problem+json" },
+        };
+        return result.ExecuteResultAsync(context);
     }
 }

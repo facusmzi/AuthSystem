@@ -1,4 +1,3 @@
-using Auth.Api.Endpoints;
 using Auth.Api.Middleware;
 using Auth.Api.Options;
 using Microsoft.AspNetCore.Diagnostics.HealthChecks;
@@ -34,8 +33,7 @@ public static class ApiPipelineExtensions
 
     public static WebApplication MapApiEndpoints(this WebApplication app)
     {
-        var api = app.MapGroup("/api/v1");
-        api.MapAuthEndpoints();
+        app.MapControllers();
 
         app.MapHealthChecks("/health/live", new HealthCheckOptions { Predicate = _ => false }).AllowAnonymous();
         app.MapHealthChecks("/health/ready").AllowAnonymous();

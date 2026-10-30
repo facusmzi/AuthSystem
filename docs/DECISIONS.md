@@ -78,3 +78,16 @@ security stamp, por lo que el de reset queda inválido tras usarse (uso único).
 
 En el registro la política de contraseña (incluido HIBP) se evalúa primero, y en el camino "email
 existente" se gasta un hash Argon2 equivalente: ni el código de estado ni la latencia revelan la cuenta.
+
+## D-012 · Controllers en lugar de Minimal APIs
+
+Por pedido explícito, la capa HTTP usa **controllers** (`[ApiController]`, rutas `api/v1/...`) en lugar de
+Minimal APIs con `MapGroup`. El resto del plan no cambia. Equivalencias:
+- `ValidationFilter<T>` (endpoint filter) → `ValidationFilter` global (`IAsyncActionFilter`) que ejecuta el
+  `IValidator<T>` de cada argumento y responde 422.
+- Errores de binding (body ausente / JSON inválido) → `InvalidModelStateResponseFactory` devuelve 400
+  ProblemDetails con `code = BAD_REQUEST`.
+- `.RequireRateLimiting(..)` / `.AllowAnonymous()` / `.RequirePermission(..)` → atributos
+  `[EnableRateLimiting]`, `[AllowAnonymous]` y `[HasPermission]`.
+- Los resultados `Result<T>` se convierten con `ToActionResult()`; los errores con `ProblemResult`, que
+  serializa el tipo concreto (no se pierde `errors` en los 422) y agrega `traceId`.

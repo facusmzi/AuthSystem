@@ -6,6 +6,7 @@ using Auth.Infrastructure.Options;
 using Auth.Infrastructure.Persistence;
 using Auth.Infrastructure.Security;
 using Auth.Infrastructure.Services;
+using Auth.Infrastructure.Tokens;
 using Microsoft.AspNetCore.DataProtection;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.EntityFrameworkCore;
@@ -35,8 +36,12 @@ public static class DependencyInjection
         AddEmail(services);
         AddPasswordBreachChecker(services);
 
+        AddTokensAndSessions(services);
+
         services.AddScoped<IAuditLogger, AuditLogger>();
         services.AddScoped<IPasswordService, PasswordService>();
+        services.AddScoped<AccountLockout>();
+        services.AddScoped<IAccountService, AccountService>();
         services.AddScoped<IAuthService, AuthService>();
 
         return services;
@@ -58,6 +63,23 @@ public static class DependencyInjection
         services.AddValidatedOptions<AuditOptions>(AuditOptions.SectionName);
         services.AddValidatedOptions<MaintenanceOptions>(MaintenanceOptions.SectionName);
         services.AddValidatedOptions<SeedOptions>(SeedOptions.SectionName);
+        services.AddValidatedOptions<UserSessionOptions>(UserSessionOptions.SectionName)
+            .Validate(o => o.SlidingDays <= o.AbsoluteDays, "Sessions:SlidingDays must be <= AbsoluteDays.");
+        services.AddValidatedOptions<JwtOptions>(JwtOptions.SectionName)
+            .Validate(o => o.SigningKeys.Count(k => k.Active) == 1, "Exactly one Jwt:SigningKeys entry must be Active.")
+            .Validate(o => o.SigningKeys.All(k => !string.IsNullOrWhiteSpace(k.Kid) && !string.IsNullOrWhiteSpace(k.Path)), "Every Jwt:SigningKeys entry needs Kid and Path.")
+            .Validate(o => o.SigningKeys.Select(k => k.Kid).Distinct(StringComparer.Ordinal).Count() == o.SigningKeys.Count, "Jwt:SigningKeys Kid values must be unique.");
+    }
+
+    private static void AddTokensAndSessions(IServiceCollection services)
+    {
+        services.AddSingleton<EcdsaSigningKeyProvider>();
+        services.AddSingleton<ITokenService, JwtTokenService>();
+        services.AddSingleton<ISessionValidator, SessionValidator>();
+        services.AddSingleton<PermissionCacheVersion>();
+        services.AddSingleton<IPermissionService, PermissionService>();
+        services.AddScoped<SessionService>();
+        services.AddScoped<ISessionService>(sp => sp.GetRequiredService<SessionService>());
     }
 
     private static void AddDataProtection(IServiceCollection services, IConfiguration configuration, IHostEnvironment environment)

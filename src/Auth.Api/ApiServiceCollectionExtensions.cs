@@ -1,5 +1,6 @@
 using System.Diagnostics;
 using System.Net;
+using Auth.Api.Authentication;
 using Auth.Api.Errors;
 using Auth.Api.Filters;
 using Auth.Api.Middleware;
@@ -28,6 +29,8 @@ public static class ApiServiceCollectionExtensions
         AddCors(services);
         AddForwardedHeaders(services, configuration);
         services.AddAuthRateLimiting();
+        services.AddAuthSchemes();
+        services.AddAuthPolicies();
 
         services.AddHealthChecks();
         return services;

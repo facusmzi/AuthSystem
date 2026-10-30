@@ -27,6 +27,8 @@ public static class ApiPipelineExtensions
         app.UseMiddleware<SecurityHeadersMiddleware>();
         app.UseCors(CorsOptions.PolicyName);
         app.UseRateLimiter();
+        app.UseAuthentication();
+        app.UseAuthorization();
 
         return app;
     }

@@ -1,5 +1,6 @@
 using Auth.Application.Common;
 using Auth.Application.Features.Auth;
+using Auth.Domain.Sessions;
 
 namespace Auth.Application.Abstractions;
 
@@ -11,4 +12,8 @@ public interface IAuthService
     Task<Result> ConfirmEmailAsync(ConfirmEmailRequest request, CancellationToken cancellationToken);
 
     Task<Result> ResendConfirmationAsync(EmailRequest request, CancellationToken cancellationToken);
+
+    Task<Result<LoginResult>> LoginAsync(LoginRequest request, SessionKind kind, CancellationToken cancellationToken);
+
+    Task<Result<TokenResponse>> RefreshAsync(RefreshRequest request, CancellationToken cancellationToken);
 }

@@ -4,6 +4,8 @@ using System.Text.Json;
 
 namespace Auth.IntegrationTests.Infrastructure;
 
+public sealed record BearerSession(string Email, Guid UserId, string AccessToken, string RefreshToken);
+
 public static class ApiTestExtensions
 {
     public const string DefaultPassword = "correct horse battery staple";
@@ -28,6 +30,37 @@ public static class ApiTestExtensions
 
     public static Task<HttpResponseMessage> RegisterAsync(this HttpClient client, string email, string password = DefaultPassword) =>
         client.PostAsJsonAsync("/api/v1/auth/register", new { email, password });
+
+    public static Task<HttpResponseMessage> LoginAsync(this HttpClient client, string email, string password = DefaultPassword) =>
+        client.PostAsJsonAsync("/api/v1/auth/login", new { email, password });
+
+    public static Task<HttpResponseMessage> RefreshAsync(this HttpClient client, string refreshToken) =>
+        client.PostAsJsonAsync("/api/v1/auth/refresh", new { refreshToken });
+
+    public static HttpClient BearerClient(this AuthApiFactory factory, string accessToken)
+    {
+        var client = factory.CreateHttpsClient();
+        client.DefaultRequestHeaders.Authorization = new System.Net.Http.Headers.AuthenticationHeaderValue("Bearer", accessToken);
+        return client;
+    }
+
+    /// <summary>Hace login Bearer y devuelve el par de tokens.</summary>
+    public static async Task<BearerSession> LoginBearerAsync(this HttpClient client, string email, Guid userId, string password = DefaultPassword)
+    {
+        var response = await client.LoginAsync(email, password);
+        var body = await response.Content.ReadAsStringAsync();
+        response.StatusCode.ShouldBe(HttpStatusCode.OK, body);
+        var tokens = JsonDocument.Parse(body).RootElement.GetProperty("tokens");
+        return new BearerSession(email, userId, tokens.GetProperty("accessToken").GetString()!, tokens.GetProperty("refreshToken").GetString()!);
+    }
+
+    /// <summary>Usuario nuevo, confirmado y con sesión Bearer.</summary>
+    public static async Task<BearerSession> CreateUserAndLoginAsync(this AuthApiFactory factory, HttpClient client, string? email = null)
+    {
+        email ??= NewEmail();
+        var userId = await factory.RegisterConfirmedAsync(client, email);
+        return await client.LoginBearerAsync(email, userId);
+    }
 
     /// <summary>Registra y confirma el email usando el link del mail capturado.</summary>
     public static async Task<Guid> RegisterConfirmedAsync(this AuthApiFactory factory, HttpClient client, string email, string password = DefaultPassword)

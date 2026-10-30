@@ -24,19 +24,31 @@ public sealed class SmokeTests(AuthApiFactory factory) : IClassFixture<AuthApiFa
     }
 
     [Fact]
-    public async Task Unknown_route_returns_problem_details_with_code_and_trace_id()
+    public async Task Unknown_route_requires_authentication_and_returns_problem_details()
     {
+        // La fallback policy protege incluso rutas inexistentes: un anónimo no puede descubrir rutas.
         var client = factory.CreateHttpsClient();
 
         var response = await client.GetAsync("/api/v1/does-not-exist");
 
-        response.StatusCode.ShouldBe(HttpStatusCode.NotFound);
+        response.StatusCode.ShouldBe(HttpStatusCode.Unauthorized);
         response.Content.Headers.ContentType?.MediaType.ShouldBe("application/problem+json");
         var body = await response.Content.ReadFromJsonAsync<JsonElement>();
-        body.GetProperty("status").GetInt32().ShouldBe(404);
-        body.GetProperty("code").GetString().ShouldBe("NOT_FOUND");
+        body.GetProperty("status").GetInt32().ShouldBe(401);
+        body.GetProperty("code").GetString().ShouldBe("AUTH_HEADER_MISSING");
         body.TryGetProperty("traceId", out _).ShouldBeTrue();
         response.Headers.CacheControl?.NoStore.ShouldBeTrue();
+    }
+
+    [Fact]
+    public async Task Unknown_route_returns_404_problem_for_authenticated_user()
+    {
+        var client = factory.CreateHttpsClient();
+        var session = await factory.CreateUserAndLoginAsync(client);
+
+        var response = await factory.BearerClient(session.AccessToken).GetAsync("/api/v1/does-not-exist");
+
+        await response.ShouldBeProblemAsync(HttpStatusCode.NotFound, "NOT_FOUND");
     }
 
     [Fact]

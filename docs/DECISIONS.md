@@ -91,3 +91,28 @@ Minimal APIs con `MapGroup`. El resto del plan no cambia. Equivalencias:
   `[EnableRateLimiting]`, `[AllowAnonymous]` y `[HasPermission]`.
 - Los resultados `Result<T>` se convierten con `ToActionResult()`; los errores con `ProblemResult`, que
   serializa el tipo concreto (no se pierde `errors` en los 422) y agrega `traceId`.
+
+## D-013 · Lockout propio en lugar de `SignInManager.CheckPasswordSignInAsync`
+
+`CheckPasswordSignInAsync` consulta el esquema `TwoFactorRememberMe` para usuarios con MFA y usa
+`DateTimeOffset.UtcNow`. Se usa `UserManager.CheckPasswordAsync` (que mantiene el rehash automático) más
+`AccountLockout`, con la misma semántica de Identity (5 fallos → 15 min, contador compartido con MFA)
+pero con `TimeProvider`. No se registra `SignInManager`.
+
+## D-014 · El lockout por fallos no invalida sesiones activas
+
+El validador de sesión rechaza usuarios **bloqueados por un administrador** (`LockoutEnd = MaxValue`), no
+los bloqueados temporalmente por intentos fallidos: si no, un atacante podría cerrar las sesiones de la
+víctima con 5 contraseñas incorrectas. El bloqueo de admin además revoca las sesiones (`UserLocked`).
+
+## D-015 · Rutas inexistentes responden 401 a anónimos
+
+La fallback policy también aplica cuando no hay endpoint, así que un anónimo recibe 401 en cualquier ruta
+desconocida (no puede enumerar rutas); un usuario autenticado recibe 404.
+
+## D-016 · Detección de reuso de refresh token
+
+Se detecta el reuso del token inmediatamente anterior (`PreviousRefreshTokenHash`) fuera de la gracia de
+3 min y se revoca la sesión. Si el token anterior aparece dentro de la gracia pero el par todavía no está en
+cache (carrera con otra request que lo está rotando), se reintenta brevemente y, si no aparece, se devuelve
+401 sin revocar.

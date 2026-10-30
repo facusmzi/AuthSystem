@@ -1,4 +1,5 @@
 using Auth.Application.Abstractions;
+using Auth.Infrastructure.Background;
 using Auth.Infrastructure.Caching;
 using Auth.Infrastructure.Email;
 using Auth.Infrastructure.Identity;
@@ -37,6 +38,11 @@ public static class DependencyInjection
         AddPasswordBreachChecker(services);
 
         AddTokensAndSessions(services);
+
+        services.AddSingleton<SessionCleanupService>();
+        services.AddHostedService(sp => sp.GetRequiredService<SessionCleanupService>());
+        services.AddSingleton<AuditRetentionService>();
+        services.AddHostedService(sp => sp.GetRequiredService<AuditRetentionService>());
 
         services.AddScoped<IAuditLogger, AuditLogger>();
         services.AddScoped<IPasswordService, PasswordService>();

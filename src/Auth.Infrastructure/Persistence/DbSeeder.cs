@@ -1,3 +1,4 @@
+using Auth.Application.Abstractions;
 using Auth.Domain.Authorization;
 using Auth.Infrastructure.Identity;
 using Auth.Infrastructure.Options;
@@ -14,6 +15,7 @@ public sealed class DbSeeder(
     RoleManager<ApplicationRole> roleManager,
     UserManager<ApplicationUser> userManager,
     IOptions<SeedOptions> seedOptions,
+    IPermissionService permissions,
     ILogger<DbSeeder> logger)
 {
     public async Task SeedAsync(CancellationToken cancellationToken = default)
@@ -49,13 +51,14 @@ public sealed class DbSeeder(
                 throw new InvalidOperationException("Could not assign the Admin role: " + string.Join(", ", result.Errors.Select(e => e.Code)));
             }
 
+            permissions.InvalidateUser(user.Id);
             logger.LogInformation("Admin role assigned to user {UserId}", user.Id);
         }
 
         return true;
     }
 
-    private async Task EnsureRoleAsync(string name, string description, IReadOnlyCollection<string> permissions, CancellationToken cancellationToken)
+    private async Task EnsureRoleAsync(string name, string description, IReadOnlyCollection<string> rolePermissions, CancellationToken cancellationToken)
     {
         var role = await roleManager.FindByNameAsync(name);
         if (role is null)
@@ -73,7 +76,7 @@ public sealed class DbSeeder(
             .Select(p => p.Permission)
             .ToListAsync(cancellationToken);
 
-        var missing = permissions.Except(existing, StringComparer.Ordinal).ToList();
+        var missing = rolePermissions.Except(existing, StringComparer.Ordinal).ToList();
         if (missing.Count > 0)
         {
             db.RolePermissions.AddRange(missing.Select(p => new RolePermission { RoleId = role.Id, Permission = p }));

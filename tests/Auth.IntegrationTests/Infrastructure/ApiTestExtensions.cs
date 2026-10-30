@@ -1,6 +1,7 @@
 using System.Net;
 using System.Net.Http.Json;
 using System.Text.Json;
+using Microsoft.Extensions.DependencyInjection;
 
 namespace Auth.IntegrationTests.Infrastructure;
 
@@ -60,6 +61,15 @@ public static class ApiTestExtensions
         email ??= NewEmail();
         var userId = await factory.RegisterConfirmedAsync(client, email);
         return await client.LoginBearerAsync(email, userId);
+    }
+
+    /// <summary>Usuario nuevo con rol Admin (asignado como lo haría el seed) y sesión Bearer.</summary>
+    public static async Task<BearerSession> CreateAdminAsync(this AuthApiFactory factory, HttpClient client)
+    {
+        var session = await factory.CreateUserAndLoginAsync(client);
+        await factory.WithScopeAsync(async sp =>
+            (await sp.GetRequiredService<global::Auth.Infrastructure.Persistence.DbSeeder>().AssignAdminAsync(session.Email)).ShouldBeTrue());
+        return session;
     }
 
     /// <summary>Registra y confirma el email usando el link del mail capturado.</summary>

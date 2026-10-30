@@ -43,6 +43,9 @@ public static class DependencyInjection
         services.AddScoped<AccountLockout>();
         services.AddScoped<IAccountService, AccountService>();
         services.AddScoped<IAuthService, AuthService>();
+        services.AddScoped<IUserAdminService, UserAdminService>();
+        services.AddScoped<IRoleAdminService, RoleAdminService>();
+        services.AddScoped<IAuditReader, AuditReader>();
 
         return services;
     }

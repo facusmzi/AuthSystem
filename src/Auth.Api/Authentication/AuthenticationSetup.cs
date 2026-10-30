@@ -113,6 +113,9 @@ public static class AuthenticationSetup
 
     public static IServiceCollection AddAuthPolicies(this IServiceCollection services)
     {
+        services.AddSingleton<IAuthorizationPolicyProvider, Authorization.PermissionPolicyProvider>();
+        services.AddSingleton<IAuthorizationHandler, Authorization.PermissionHandler>();
+
         services.AddAuthorizationBuilder()
             // Todo endpoint sin atributos exige usuario autenticado con email verificado.
             .SetFallbackPolicy(new AuthorizationPolicyBuilder()

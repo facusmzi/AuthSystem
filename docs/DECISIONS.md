@@ -122,3 +122,11 @@ cache (carrera con otra request que lo está rotando), se reintenta brevemente y
 El plan admite 400 o 403; se usa 403. El filtro es un `IAsyncAuthorizationFilter` global, así que corre
 antes del binding/validación. El token antiforgery está atado a la identidad: la SPA debe pedir
 `GET /api/v1/auth/antiforgery` al cargar, después del login y después del logout.
+
+## D-018 · Reglas de administración
+
+- Un admin no puede bloquearse a sí mismo (409) ni el último admin puede perder el rol `Admin` (409).
+- `Admin` y `User` no se renombran ni se borran; `Admin` siempre conserva todos los permisos (409).
+- El bloqueo de admin es indefinido (`LockoutEnd = MaxValue`), revoca todas las sesiones (`UserLocked`) y solo
+  se levanta con `unlock`.
+- `PermissionService` está en Infrastructure y se prueba como test de integración (necesita la DB real).
